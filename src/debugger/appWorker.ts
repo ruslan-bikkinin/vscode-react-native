@@ -117,8 +117,7 @@ postMessage({workerLoaded:true});`;
 
     public downloadAndPatchDebuggerWorker(): Q.Promise<void> {
         let scriptToRunPath = path.resolve(this.sourcesStoragePath, ScriptImporter.DEBUGGER_WORKER_FILENAME);
-        return this.scriptImporter.downloadDebuggerWorker(this.sourcesStoragePath)
-            .then(() => this.nodeFileSystem.readFile(scriptToRunPath, "utf8"))
+        return this.scriptImporter.downloadDebuggerWorker()
             .then((workerContent: string) => {
                 // Add our customizations to debugger worker to get it working smoothly
                 // in Node env and polyfill WebWorkers API over Node's IPC.
@@ -163,17 +162,16 @@ postMessage({workerLoaded:true});`;
                   this.start(true /* retryAttempt */);
                 }, 100);
             });
-        this.socketToApp.on("message",
-            (message: any) => this.onMessage(message));
-        this.socketToApp.on("error",
-            (error: Error) => {
-                if (retryAttempt) {
-                    Log.logWarning(ErrorHelper.getNestedWarning(error,
-                        "Reconnection to the proxy (Packager) failed. Please check the output window for Packager errors, if any. If failure persists, please restart the React Native debugger."));
-                }
 
-                deferred.reject(error);
-            });
+        this.socketToApp.on("message", (message: any) => this.onMessage(message));
+        this.socketToApp.on("error", (error: Error) => {
+            if (retryAttempt) {
+                Log.logWarning(ErrorHelper.getNestedWarning(error,
+                    "Reconnection to the proxy (Packager) failed. Please check the output window for Packager errors, if any. If failure persists, please restart the React Native debugger."));
+            }
+
+            deferred.reject(error);
+        });
 
         // In an attempt to catch failures in starting the packager on first attempt,
         // wait for 300 ms before resolving the promise
