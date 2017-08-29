@@ -21,7 +21,7 @@ export interface RNAppMessage {
 }
 
 export interface IDebuggeeWorker {
-    start(): Q.Promise<any>;
+    start(workerFilePath: string): Q.Promise<any>;
     stop(): void;
     postMessage(message: RNAppMessage): void;
 }
@@ -71,6 +71,7 @@ postMessage({workerLoaded:true});`;
     private sourcesStoragePath: string;
     private socketToApp: WebSocket;
     private singleLifetimeWorker: IDebuggeeWorker | null;
+    private workerFile: string;
     private webSocketConstructor: (url: string) => WebSocket;
 
     private executionLimiter = new ExecutionsLimiter();
@@ -87,6 +88,8 @@ postMessage({workerLoaded:true});`;
 
         this.webSocketConstructor = webSocketConstructor;
         this.scriptImporter = new ScriptImporter(packagerPort, sourcesStoragePath);
+
+        this.workerFile = path.resolve(this.sourcesStoragePath, ScriptImporter.DEBUGGER_WORKER_FILENAME);
     }
 
     public start(retryAttempt: boolean = false): Q.Promise<any> {
@@ -116,23 +119,22 @@ postMessage({workerLoaded:true});`;
     }
 
     public downloadAndPatchDebuggerWorker(): Q.Promise<void> {
-        let scriptToRunPath = path.resolve(this.sourcesStoragePath, ScriptImporter.DEBUGGER_WORKER_FILENAME);
         return this.scriptImporter.downloadDebuggerWorker()
             .then((workerContent: string) => {
                 // Add our customizations to debugger worker to get it working smoothly
                 // in Node env and polyfill WebWorkers API over Node's IPC.
                 const modifiedDebuggeeContent = [MultipleLifetimesAppWorker.WORKER_BOOTSTRAP,
                     workerContent, MultipleLifetimesAppWorker.WORKER_DONE].join("\n");
-                return this.nodeFileSystem.writeFile(scriptToRunPath, modifiedDebuggeeContent);
+                return this.nodeFileSystem.writeFile(this.workerFile, modifiedDebuggeeContent);
             });
     }
 
     private startNewWorkerLifetime(): Q.Promise<void> {
-        this.singleLifetimeWorker = new ForkedAppWorker(this.packagerPort, this.sourcesStoragePath, (message) => {
+        this.singleLifetimeWorker = new ForkedAppWorker(this.scriptImporter, (message) => {
             this.sendMessageToApp(message);
         });
         Log.logInternalMessage(LogLevel.Info, "A new app worker lifetime was created.");
-        return this.singleLifetimeWorker.start()
+        return this.singleLifetimeWorker.start(this.workerFile)
             .then(startedEvent => {
                 this.emit("connected", startedEvent);
             });

@@ -2,7 +2,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for details.
 
 import * as Q from "q";
-import * as path from "path";
 import * as child_process from "child_process";
 import { ScriptImporter }  from "./scriptImporter";
 
@@ -24,19 +23,15 @@ function printDebuggingError(message: string, reason: any) {
  */
 export class ForkedAppWorker implements IDebuggeeWorker {
 
-    private scriptImporter: ScriptImporter;
     private debuggeeProcess: child_process.ChildProcess | null = null;
     /** A deferred that we use to make sure that worker has been loaded completely defore start sending IPC messages */
     private workerLoaded = Q.defer<void>();
     private bundleLoaded: Q.Deferred<void>;
 
     constructor(
-        private packagerPort: number,
-        private sourcesStoragePath: string,
+        private scriptImporter: ScriptImporter,
         private postReplyToApp: (message: any) => void
-    ) {
-        this.scriptImporter = new ScriptImporter(this.packagerPort, this.sourcesStoragePath);
-    }
+    ) { }
 
     public stop() {
         if (this.debuggeeProcess) {
@@ -46,14 +41,13 @@ export class ForkedAppWorker implements IDebuggeeWorker {
         }
     }
 
-    public start(): Q.Promise<number> {
-        let scriptToRunPath = path.resolve(this.sourcesStoragePath, ScriptImporter.DEBUGGER_WORKER_FILENAME);
+    public start(workerPath: string): Q.Promise<number> {
         const port = Math.round(Math.random() * 40000 + 3000);
 
         // Note that we set --debug-brk flag to pause the process on the first line - this is
         // required for debug adapter to set the breakpoints BEFORE the debuggee has started.
         // The adapter will continue execution once it's done with breakpoints.
-        const nodeArgs = [`--inspect=${port}`, "--debug-brk", scriptToRunPath];
+        const nodeArgs = [`--inspect=${port}`, "--debug-brk", workerPath];
         // Start child Node process in debugging mode
         this.debuggeeProcess = child_process.spawn("node", nodeArgs, {
             stdio: ["pipe", "pipe", "pipe", "ipc"],

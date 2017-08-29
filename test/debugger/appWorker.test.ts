@@ -11,6 +11,7 @@ import * as child_process from "child_process";
 import { MultipleLifetimesAppWorker } from "../../src/debugger/appWorker";
 import { ForkedAppWorker } from "../../src/debugger/forkedAppWorker";
 import * as ForkedAppWorkerModule from "../../src/debugger/forkedAppWorker";
+import { ScriptImporter } from "../../src/debugger/scriptImporter";
 import {Packager} from "../../src/common/packager";
 
 suite("appWorker", function() {
@@ -35,7 +36,7 @@ suite("appWorker", function() {
                 spawnStub = sinon.stub(child_process, "spawn", () =>
                     originalSpawn("node", ["-e", wrappedBody], {stdio: ["pipe", "pipe", "pipe", "ipc"]}));
 
-                testWorker = new ForkedAppWorker(packagerPort, sourcesStoragePath, postReplyFunction);
+                testWorker = new ForkedAppWorker(new ScriptImporter(packagerPort, sourcesStoragePath), postReplyFunction);
                 return testWorker;
             }
 
@@ -52,7 +53,7 @@ suite("appWorker", function() {
                 const expectedMessageResult = { success: true };
                 const startScriptContents = `var testResponse = ${JSON.stringify(expectedMessageResult)}; postMessage(testResponse);`;
 
-                return workerWithScript(startScriptContents).start()
+                return workerWithScript(startScriptContents).start("/dummyFile")
                 .then(() =>
                     Q.delay(1000))
                 .then(() =>
@@ -65,7 +66,7 @@ suite("appWorker", function() {
                 const scriptImportPath = path.resolve(sourcesStoragePath, "importScriptsTest.js");
                 const startScriptContents = `importScripts("${scriptImportPath}"); postMessage("postImport");`;
 
-                return workerWithScript(startScriptContents).start().then(() => {
+                return workerWithScript(startScriptContents).start("/dummyFile").then(() => {
                     // We have not yet finished importing the script, we should not have posted a response yet
                     assert(postReplyFunction.notCalled, "postReplyFuncton called before scripts imported");
                     return Q.delay(500);
@@ -80,7 +81,7 @@ suite("appWorker", function() {
                 const testMessage = { method: "test", success: true };
 
                 const worker = workerWithScript(startScriptContents);
-                return worker.start().then(() => {
+                return worker.start("/dummyFile").then(() => {
                     assert(postReplyFunction.notCalled, "postRepyFunction called before message sent");
                     worker.postMessage(testMessage);
                     return Q.delay(1000);
@@ -95,7 +96,7 @@ suite("appWorker", function() {
                     var testResponse = { qString: Q.toString() };
                     postMessage(testResponse);`;
 
-                return workerWithScript(startScriptContents).start()
+                return workerWithScript(startScriptContents).start("/dummyFile")
                 .then(() => Q.delay(500))
                 .then(() =>
                     assert(postReplyFunction.calledWithExactly(expectedMessageResult)));
