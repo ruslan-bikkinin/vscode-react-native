@@ -1,21 +1,25 @@
 {
-    "version": "0.1.0",
-    "command": "gulp",
-    "isShellCommand": true,
+    "version": "2.0.0",
     "tasks": [
         {
-            "taskName": "watch",
-            "isBuildCommand": true,
+            "label": "watch",
+            "group": "build",
+            "type": "shell",
             "isBackground": true,
+            "command": "gulp watch",
             "problemMatcher": "$gulp-tsc"
         },
         {
-            "taskName": "build",
-            "isBuildCommand": true,
+            "label": "build",
+            "group": "build",
+            "type": "shell",
+            "command": "gulp build",
             "problemMatcher": "$gulp-tsc"
         },
         {
-            "taskName": "tslint",
+            "label": "tslint",
+            "type": "shell",
+            "command": "gulp tslint",
             "problemMatcher": "$tslint5"
         }
     ]
