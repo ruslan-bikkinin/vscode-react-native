@@ -139,18 +139,23 @@ suite("appWorker", function() {
             test("debuggee process should pass it's output to appWorker", () => {
                 const sourcesStoragePath = path.resolve(__dirname, "assets", "consoleLog");
                 testWorker = new ForkedAppWorker("localhost", packagerPort, sourcesStoragePath, "", postReplyFunction);
-                let output: string = "";
                 return testWorker.start().then(() => {
-                    process.stdout.on("data", (data: string) => {
+                    const debuggeeProcess = testWorker.getDebugeeProcess() as child_process.ChildProcess;
+                    let output: string = "";
+                    debuggeeProcess.stderr.on("data", (data: string) => {
                         output += data;
                     });
-
-                    const debuggeeProcess = testWorker.getDebugeeProcess() as child_process.ChildProcess;
+                    debuggeeProcess.stdin.on("data", (data: string) => {
+                        output += data;
+                    });
+                    debuggeeProcess.stdout.on("data", (data: string) => {
+                        output += data;
+                    });
                     debuggeeProcess.on("exit", () => {
                         assert.notEqual(output, "");
                         assert.equal(output, "test output from debuggee process");
                     });
-                    debuggeeProcess.send({});
+                    debuggeeProcess.send({"some": "message"});
                 });
             });
         });
