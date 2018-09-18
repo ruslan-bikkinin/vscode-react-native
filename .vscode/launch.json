@@ -5,7 +5,8 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
-            "program": "${workspaceFolder}/test/debugger/assets/consoleLog/q.js"
+            "program": "${workspaceFolder}/test/debugger/assets/consoleLog/q.js",
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "Launch Extension",
@@ -164,7 +165,8 @@
                 "tdd",
                 // "--grep", "patternToFilterTestsBy",
                 "test/debugger/**/*.test.js",
-                "test/common/**/*.test.js"
+                "test/common/**/*.test.js",
+                "--timeout", "1590000"
             ],
             "cwd": "${workspaceRoot}",
             "runtimeExecutable": null,
