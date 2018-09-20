@@ -75,7 +75,7 @@ export class ForkedAppWorker implements IDebuggeeWorker {
         // Note that we set --debug-brk flag to pause the process on the first line - this is
         // required for debug adapter to set the breakpoints BEFORE the debuggee has started.
         // The adapter will continue execution once it's done with breakpoints.
-        const nodeArgs = [`--inspect=${port}`, "--debug-brk", scriptToRunPath];
+        const nodeArgs = [`--inspect=${port}`, "--inspect-brk", scriptToRunPath];
         // Start child Node process in debugging mode
         this.debuggeeProcess = child_process.spawn("node", nodeArgs, {
             stdio: ["pipe", "pipe", "pipe", "ipc"],

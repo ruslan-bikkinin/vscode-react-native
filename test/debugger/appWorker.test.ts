@@ -7,7 +7,6 @@ import * as path from "path";
 import * as Q from "q";
 import * as sinon from "sinon";
 import * as child_process from "child_process";
-import * as http from "http";
 
 import { MultipleLifetimesAppWorker } from "../../src/debugger/appWorker";
 import { ForkedAppWorker } from "../../src/debugger/forkedAppWorker";
@@ -142,11 +141,36 @@ suite("appWorker", function () {
                 testWorker = new ForkedAppWorker("localhost", packagerPort, sourcesStoragePath, "", postReplyFunction);
                 let output: string = "";
                 let debugPort;
+
+                const sendContinueToDebugee = (wsPath: string) => {
+                    const WebSocket = require("ws");
+                    const ws = new WebSocket(wsPath);
+                    ws.on("open", function open() {
+                        ws.send(JSON.stringify({
+                            "id": 100,
+                            "method": "Runtime.runIfWaitingForDebugger",
+                        }), (err: Error) => {
+                            if (err) {
+                                throw err;
+                            }
+                            ws.close();
+                        });
+                    });
+                    ws.on("message", function incoming(data: string) {
+                        //console.log(data);
+                    });
+                };
+
                 return testWorker.start().then((port: number) => {
                     debugPort = port;
                     const debuggeeProcess = testWorker.getDebugeeProcess() as child_process.ChildProcess;
                     debuggeeProcess.stderr.on("data", (data: string) => {
+                        data = data.toString();
                         output += data;
+                        const found = output.match(/(ws:\/\/.+$)/gm);
+                        if (found) {
+                            sendContinueToDebugee(found[0]);
+                        }
                     });
                     debuggeeProcess.stdin.on("data", (data: string) => {
                         output += data;
@@ -158,24 +182,7 @@ suite("appWorker", function () {
                         assert.notEqual(output, "");
                         assert.equal(output, "test output from debuggee process");
                     });
-                    return getWebSocketDebuggerUrl(debugPort);
-                }).then((wsPath: string) => {
-                    const WebSocket = require("ws");
-                    const ws = new WebSocket(wsPath);
-                    return Q.Promise((resolve, reject) => {
-                        ws.on("open", function open() {
-                            ws.send(JSON.stringify({
-                                "id": 100,
-                                "method": "Runtime.runIfWaitingForDebugger",
-                            }), (err: Error) => {
-                                if (err) reject(err);
-                                resolve({});
-                            });
-                        });
-                        ws.on("message", function incoming(data: string) {
-                            console.log(data);
-                        });
-                    });
+                    return Q.delay(Q.resolve({}), 1000);
                 });
             });
         });
@@ -342,28 +349,3 @@ suite("appWorker", function () {
         });
     });
 });
-
-function getWebSocketDebuggerUrl(port: number): Q.Promise<string> {
-    return Q.Promise((resolve, reject) => {
-        const req = http.get({ port, path: "/json/list", headers: { "Connection": "keep-alive" } }, (res: http.IncomingMessage) => {
-            let response = "";
-            res.setEncoding("utf8");
-            res
-                .on("data", (data) => response += data.toString())
-                .on("end", () => {
-                    resolve(response);
-                });
-        });
-        req.on("error", (err) => {
-            reject(err);
-        });
-    }).then((response: string) => {
-        try {
-            const res = JSON.parse(response);
-            return res[0].webSocketDebuggerUrl;
-        } catch (e) {
-            e.body = response;
-            throw e;
-        }
-    });
-}
