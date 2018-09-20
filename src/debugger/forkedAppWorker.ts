@@ -149,9 +149,4 @@ export class ForkedAppWorker implements IDebuggeeWorker {
 
         return promise;
     }
-
-    // For tests only
-    public getDebugeeProcess() {
-        return this.debuggeeProcess;
-    }
 }

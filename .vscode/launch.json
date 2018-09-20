@@ -163,10 +163,10 @@
             "args": [
                 "--ui",
                 "tdd",
-                // "--grep", "patternToFilterTestsBy",
+                //"--grep", "debuggee process should pass it's output to appWorker",
                 "test/debugger/**/*.test.js",
                 "test/common/**/*.test.js",
-                "--timeout", "1590000"
+                //"--timeout", "1590000"
             ],
             "cwd": "${workspaceRoot}",
             "runtimeExecutable": null,
