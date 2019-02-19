@@ -5,7 +5,6 @@ import * as os from "os";
 import {ErrorHelper} from "./error/errorHelper";
 import {HostPlatform} from "./hostPlatform";
 import {InternalErrorCode} from "./error/internalErrorCode";
-
 /**
  * Defines the identifiers of all the mobile target platforms React Native supports.
  */
@@ -32,7 +31,7 @@ export class TargetPlatformHelper {
             case "wpf":
                 return TargetPlatformId.WINDOWS;
             default:
-                throw new Error(`The target platform ${platformName} is not supported.`);
+                throw ErrorHelper.getInternalError(InternalErrorCode.PlatformNotSupported, platformName, os.platform());
         }
     }
 

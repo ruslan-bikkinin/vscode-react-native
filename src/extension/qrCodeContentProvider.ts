@@ -2,13 +2,15 @@
 // Licensed under the MIT license. See LICENSE file in the project root for details.
 
 import * as qr from "qr-image";
-import { TextDocumentContentProvider, Uri, CancellationToken } from "vscode";
+import { TextDocumentContentProvider, Uri } from "vscode";
+import * as nls from "vscode-nls";
+const localize = nls.loadMessageBundle();
 
 export class QRCodeContentProvider implements TextDocumentContentProvider {
 
     private cache: { [uri: string]: string } = {};
 
-    public provideTextDocumentContent(uri: Uri, token: CancellationToken): string {
+    public provideTextDocumentContent(uri: Uri): string {
 
         let stringUri = uri.toString();
 
@@ -16,15 +18,13 @@ export class QRCodeContentProvider implements TextDocumentContentProvider {
             const imageBuffer: NodeBuffer = qr.imageSync(stringUri);
             this.cache[stringUri] = "data:image/png;base64," + imageBuffer.toString("base64");
         }
-
+        let message = localize("QRCodeInstructions", "Expo is running. Open your Expo app at<br/><span style=\"text-decoration: underline\">{0}</span><br/>or scan QR code below:", stringUri);
         return `<!DOCTYPE html>
         <html>
         <body>
             <div style="text-align:center">
                 <h3>
-                    Expo is running. Open your Expo app at<br/>
-                    <span style="text-decoration: underline">${stringUri}</span><br/>
-                    or scan QR code below:
+                    ${message}
                 <h3>
                 <img src="${this.cache[stringUri]}" />
             </div>

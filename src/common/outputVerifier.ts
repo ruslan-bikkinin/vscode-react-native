@@ -3,10 +3,12 @@
 
 import * as Q from "q";
 import {ISpawnResult} from "./node/childProcess";
+import { ErrorHelper } from "./error/errorHelper";
+import { InternalErrorCode } from "./error/internalErrorCode";
 
 export type PatternToFailure = {
     pattern: string | RegExp,
-    message: string
+    errorCode: number
 };
 
 /* This class transforms a spawn process to only succeed if all defined success patterns
@@ -35,20 +37,15 @@ export class OutputVerifier {
         return spawnResult.outcome // Wait for the process to finish
             .then(this.generatePatternToFailure) // Generate the failure patterns to check
             .then(patterns => {
-                const failureMessage = this.findAnyFailurePattern(patterns);
-                if (failureMessage) {
-                    return Q.reject<string[]>(new Error(failureMessage)); // If at least one failure happened, we fail
+                const failureErrorCode = this.findAnyFailurePattern(patterns);
+                if (failureErrorCode) {
+                    return Q.reject<string[]>(ErrorHelper.getInternalError(failureErrorCode)); // If at least one failure happened, we fail
                 } else {
                     return this.generatePatternsForSuccess(); // If not we generate the success patterns
                 }
             }).then(successPatterns => {
                 if (!this.areAllSuccessPatternsPresent(successPatterns)) { // If we don't find all the success patterns, we also fail
-                    const message =
-                    `Unknown error: not all success patterns were matched.
-It means that "react-native run-${this.platformName}" command failed. \
-Please, check the View -> Toggle Output -> React Native, \
-View -> Toggle Output -> React Native: Run ${this.platformName} output windows.`;
-                    return Q.reject<void>(new Error(message));
+                    return Q.reject<void>(ErrorHelper.getInternalError(InternalErrorCode.NotAllSuccessPatternsMatched, this.platformName, this.platformName));
                 } // else we found all the success patterns, so we succeed
                 return Q.resolve(void 0);
             });
@@ -61,7 +58,7 @@ View -> Toggle Output -> React Native: Run ${this.platformName} output windows.`
     }
 
     // We check the failure patterns one by one, to see if any of those appeared on the errors. If they did, we return the associated error
-    private findAnyFailurePattern(patterns: PatternToFailure[]): string | null {
+    private findAnyFailurePattern(patterns: PatternToFailure[]): number | null {
         const errorsAndOutput = this.errors + this.output;
         const patternThatAppeared = patterns.find(pattern => {
             return pattern.pattern instanceof RegExp ?
@@ -69,7 +66,7 @@ View -> Toggle Output -> React Native: Run ${this.platformName} output windows.`
                 errorsAndOutput.indexOf(pattern.pattern as string) !== -1;
         });
 
-        return patternThatAppeared ? patternThatAppeared.message : null;
+        return patternThatAppeared ? patternThatAppeared.errorCode : null;
     }
 
     // We check that all the patterns appeared on the output

@@ -17,7 +17,13 @@ import {ExponentHelper} from "./exponent/exponentHelper";
 import {ReactDirManager} from "./reactDirManager";
 import {ExtensionServer} from "./extensionServer";
 import {IAndroidRunOptions, IIOSRunOptions} from "./launchArgs";
-import { ExponentPlatform } from "./exponent/exponentPlatform";
+import {ExponentPlatform} from "./exponent/exponentPlatform";
+import {spawn, ChildProcess} from "child_process";
+import {HostPlatform} from "../common/hostPlatform";
+import * as nls from "vscode-nls";
+import { ErrorHelper } from "../common/error/errorHelper";
+import { InternalErrorCode } from "../common/error/internalErrorCode";
+const localize = nls.loadMessageBundle();
 
 interface IReactNativeStuff {
     packager: Packager;
@@ -31,6 +37,7 @@ interface IReactNativeProject extends IReactNativeStuff {
 }
 
 export class CommandPaletteHandler {
+    public static elementInspector: ChildProcess | null;
     private static projectsCache: {[key: string]: IReactNativeProject} = {};
     private static logger: OutputChannelLogger = OutputChannelLogger.getMainChannel();
 
@@ -107,7 +114,7 @@ export class CommandPaletteHandler {
                 return this.executeCommandInContext("publishToExpHost", project.workspaceFolder, () => {
                     return this.executePublishToExpHost(project).then((didPublish) => {
                         if (!didPublish) {
-                            CommandPaletteHandler.logger.warning("Publishing was unsuccessful. Please make sure you are logged in Exponent and your project is a valid Exponentjs project");
+                            CommandPaletteHandler.logger.warning(localize("ExponentPublishingWasUnsuccessfulMakeSureYoureLoggedInToExpo", "Publishing was unsuccessful. Please make sure you are logged in Expo and your project is a valid Expo project"));
                         }
                     });
                 });
@@ -210,6 +217,40 @@ export class CommandPaletteHandler {
             });
     }
 
+    public static runElementInspector(): Q.Promise<void> {
+        if (!CommandPaletteHandler.elementInspector) {
+            // Remove the following env variables to prevent running electron app in node mode.
+            // https://github.com/Microsoft/vscode/issues/3011#issuecomment-184577502
+            let env = Object.assign({}, process.env);
+            delete env.ATOM_SHELL_INTERNAL_RUN_AS_NODE;
+            delete env.ELECTRON_RUN_AS_NODE;
+            let command = HostPlatform.getNpmCliCommand("react-devtools");
+            CommandPaletteHandler.elementInspector = spawn(command, [], {
+                env,
+            });
+            if (!CommandPaletteHandler.elementInspector.pid) {
+                CommandPaletteHandler.elementInspector = null;
+                return Q.reject(ErrorHelper.getInternalError(InternalErrorCode.ReactDevtoolsIsNotInstalled));
+            }
+            CommandPaletteHandler.elementInspector.stdout.on("data", (data: string) => {
+                this.logger.info(data);
+            });
+            CommandPaletteHandler.elementInspector.stderr.on("data", (data: string) => {
+                this.logger.error(data);
+            });
+            CommandPaletteHandler.elementInspector.once("exit", () => {
+                CommandPaletteHandler.elementInspector = null;
+            });
+        } else {
+            this.logger.info(localize("AnotherElementInspectorAlreadyRun", "Another element inspector already run"));
+        }
+        return Q(void 0);
+    }
+
+    public static stopElementInspector(): void {
+        return CommandPaletteHandler.elementInspector ? CommandPaletteHandler.elementInspector.kill() : void 0;
+    }
+
     public static getPlatformByCommandName(commandName: string): string {
         commandName = commandName.toLocaleLowerCase();
 
@@ -277,7 +318,7 @@ export class CommandPaletteHandler {
      * Publish project to exponent server. In order to do this we need to make sure the user is logged in exponent and the packager is running.
      */
     private static executePublishToExpHost(project: IReactNativeProject): Q.Promise<boolean> {
-        CommandPaletteHandler.logger.info("Publishing app to Exponent server. This might take a moment.");
+        CommandPaletteHandler.logger.info(localize("PublishingAppToExponentServer", "Publishing app to Expo server. This might take a moment."));
         return this.loginToExponent(project)
             .then(user => {
                 CommandPaletteHandler.logger.debug(`Publishing as ${user.username}...`);
@@ -288,7 +329,7 @@ export class CommandPaletteHandler {
                         if (response.err || !response.url) {
                             return false;
                         }
-                        const publishedOutput = `App successfully published to ${response.url}`;
+                        const publishedOutput = localize("ExpoAppSuccessfullyPublishedTo", "Expo app successfully published to {0}", response.url);
                         CommandPaletteHandler.logger.info(publishedOutput);
                         vscode.window.showInformationMessage(publishedOutput);
                         return true;
@@ -316,7 +357,7 @@ export class CommandPaletteHandler {
             }
         )
         .catch((err) => {
-            CommandPaletteHandler.logger.warning("An error has occured. Please make sure you are logged in to exponent, your project is setup correctly for publishing and your packager is running as exponent.");
+            CommandPaletteHandler.logger.warning(localize("ExpoErrorOccuredMakeSureYouAreLoggedIn", "An error has occured. Please make sure you are logged in to Expo, your project is setup correctly for publishing and your packager is running as Expo."));
             throw err;
         });
     }
@@ -337,7 +378,7 @@ export class CommandPaletteHandler {
             this.logger.debug(`Command palette: once project ${keys[0]}`);
             return Q.resolve(this.projectsCache[keys[0]]);
         } else {
-            return Q.reject(new Error("Current workspace does not contain React Native projects."));
+            return Q.reject(ErrorHelper.getInternalError(InternalErrorCode.WorkspaceNotFound, "Current workspace does not contain React Native projects."));
         }
     }
 

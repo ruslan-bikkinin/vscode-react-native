@@ -11,6 +11,8 @@ import {SourceMapUtil} from "./sourceMap";
 import url = require("url");
 import * as semver from "semver";
 import {ReactNativeProjectHelper} from "../common/reactNativeProjectHelper";
+import { ErrorHelper } from "../common/error/errorHelper";
+import { InternalErrorCode } from "../common/error/internalErrorCode";
 
 export interface DownloadedScript {
     contents: string;
@@ -82,16 +84,14 @@ export class ScriptImporter {
     }
 
     public downloadDebuggerWorker(sourcesStoragePath: string, projectRootPath: string): Q.Promise<void> {
-        const errPackagerNotRunning = new RangeError(`Cannot attach to packager. Are you sure there is a packager and it is running in the port ${this.packagerPort}? If your packager is configured to run in another port make sure to add that to the setting.json.`);
-
+        const errPackagerNotRunning = ErrorHelper.getInternalError(InternalErrorCode.CannotAttachToPackagerCheckPackagerRunningOnPort, this.packagerPort);
         return ensurePackagerRunning(this.packagerAddress, this.packagerPort, errPackagerNotRunning)
             .then(() => {
                 return ReactNativeProjectHelper.getReactNativeVersion(projectRootPath);
             })
             .then((rnVersion: string) => {
                 let newPackager = "";
-                const isHaulProject = ReactNativeProjectHelper.isHaulProject(projectRootPath);
-                if (!semver.valid(rnVersion) /*Custom RN implementations should support new packager*/ || (semver.gte(rnVersion, "0.50.0") && !isHaulProject)) {
+                if (!semver.valid(rnVersion) /*Custom RN implementations should support new packager*/ || (semver.gte(rnVersion, "0.50.0"))) {
                     newPackager = "debugger-ui/";
                 }
                 let debuggerWorkerURL = `http://${this.packagerAddress}:${this.packagerPort}/${newPackager}${ScriptImporter.DEBUGGER_WORKER_FILENAME}`;
