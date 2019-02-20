@@ -1,3 +1,7 @@
+## 0.8.1
+* Improved extension security
+* Improved error logging
+
 ## 0.8.0
 * Improved extension security
 * Improved error logging
