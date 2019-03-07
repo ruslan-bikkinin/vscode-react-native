@@ -1,4 +1,5 @@
 # React Native Tools
+
 1234
 [![Build Status](https://travis-ci.org/Microsoft/vscode-react-native.svg?branch=master)](https://travis-ci.org/Microsoft/vscode-react-native)
 
@@ -23,13 +24,21 @@ Please notice that the extension uses `.vscode/.react` directory at the project 
 
 ## Debugging React Native applications
 
-Click the debug icon ![Choose React Native debugger](images/debug-view-icon.png) in the View bar, and then click the configuration (gear) icon ![Configure-gear](images/configure-gear-icon.png), then choose the React Native debug environment.
+To start debugging create a new debug configuration for your ReactNative app in your `.vscode/launch.json`. Adding a new configuration can be done by opening your `launch.json` file and clicking on `Add Configuration...` button and choosing a relevant debug configuration. All available debug configurations for ReactNative can be accessed by typing in *ReactNative* and picking one from the list populated by Intellisense as shown in the image below.
+
+![Add React Native debug configuration](images/add-debug-configuration.gif)
+
+In case if you haven't `.vscode/launch.json` file yet, you can add a whole default debug configuration set. To do that click the debug icon ![Choose React Native debugger](images/debug-view-icon.png) in the View bar, and then click the configuration (gear) icon ![Configure-gear](images/configure-gear-icon.png), then choose the React Native debug environment.
 
 ![Choose React Native debugger](images/choose-debugger.png)
 
 VS Code will generate a `launch.json` in your project with some default configuration settings as shown below. You can safely close this file, choose the appropriate configuration in the Configuration dropdown, and then press F5 (or click _Green Arrow_ ![Configure-gear](images/debug-icon.png) button) to start debugging your app in VS Code.
 
 ![React Native launch targets](images/debug-targets.png)
+
+Once app is loaded and ran, [open Developer Menu](https://facebook.github.io/react-native/docs/debugging#accessing-the-in-app-developer-menu) inside your application and enable remote debugging by clicking on `Debug JS Remotely` button.
+
+![React Native enable remote debug](images/enable-remote-debug.png)
 
 You can debug your app on an Android emulator, Android device or iOS simulator. This extension provides [experimental support](doc/debugging.md#debugging-on-ios-device) for iOS devices.
 
@@ -51,9 +60,7 @@ The **Packager** commands allow you to start/stop the [**Metro Bundler**](https:
 
 ## Using Expo
 
-We support using Expo to run, debug and publish applications. For more information on Expo, see [here](https://docs.expo.io).
-
-For more details about configuring and debugging Expo applications see [Expo docs](doc/expo.md)
+We support using Expo to run, debug and publish applications. For more details about configuring and debugging Expo applications see [Expo docs](doc/expo.md)
 
 ## Build APK and Generate Bundle
 

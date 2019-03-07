@@ -1,111 +1,102 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for details.
 
-var gulp = require("gulp");
-var log = require("gulp-util").log;
-var istanbul = require('gulp-istanbul');
-var isparta = require('isparta');
-var sourcemaps = require("gulp-sourcemaps");
-var path = require("path");
-var preprocess = require("gulp-preprocess");
-var install = require("gulp-install");
-var runSequence = require("run-sequence");
-var ts = require("gulp-typescript");
-var mocha = require("gulp-mocha");
-var GulpExtras = require("./tools/gulp-extras");
-var minimist = require("minimist");
-var os = require("os");
-var fs = require("fs");
-var Q = require("q");
-var remapIstanbul = require('remap-istanbul/lib/gulpRemapIstanbul');
-var execSync = require('child_process').execSync;
+const gulp = require("gulp");
+const log = require("fancy-log");
+const istanbul = require("gulp-istanbul");
+const isparta = require("isparta");
+const sourcemaps = require("gulp-sourcemaps");
+const path = require("path");
+const preprocess = require("gulp-preprocess");
+const ts = require("gulp-typescript");
+const mocha = require("gulp-mocha");
+const GulpExtras = require("./tools/gulp-extras");
+const minimist = require("minimist");
+const os = require("os");
+const fs = require("fs");
+const Q = require("q");
+const es = require("event-stream");
+const remapIstanbul = require("remap-istanbul/lib/gulpRemapIstanbul");
+const nls = require("vscode-nls-dev");
+const libtslint = require("tslint");
+const tslint = require("gulp-tslint");
 
-var copyright = GulpExtras.checkCopyright;
-var imports = GulpExtras.checkImports;
-var executeCommand = GulpExtras.executeCommand;
+const copyright = GulpExtras.checkCopyright;
+const imports = GulpExtras.checkImports;
+const executeCommand = GulpExtras.executeCommand;
 
+const translationProjectName  = "vscode-extensions";
+const translationExtensionName  = "vscode-react-native";
+const defaultLanguages = [
+    { id: "zh-tw", folderName: "cht", transifexId: "zh-hant" },
+    { id: "zh-cn", folderName: "chs", transifexId: "zh-hans" },
+    { id: "ja", folderName: "jpn" },
+    { id: "ko", folderName: "kor" },
+    { id: "de", folderName: "deu" },
+    { id: "fr", folderName: "fra" },
+    { id: "es", folderName: "esn" },
+    { id: "ru", folderName: "rus" },
+    { id: "it", folderName: "ita" },
 
-var srcPath = "src";
-var testPath = "test";
+    // These language-pack languages are included for VS but excluded from the vscode package
+    { id: "cs", folderName: "csy" },
+    { id: "tr", folderName: "trk" },
+    { id: "pt-br", folderName: "ptb", transifexId: "pt_BR" },
+    { id: "pl", folderName: "plk" }
+];
 
-var sources = [
-    srcPath,
-    testPath,
-].map(function (tsFolder) { return tsFolder + "/**/*.ts"; });
+const srcPath = "src";
+const testPath = "test";
 
-var knownOptions = {
+const sources = [srcPath, testPath].map((tsFolder) => tsFolder + "/**/*.ts");
+
+const knownOptions = {
     string: "env",
     default: { env: "production" }
 };
 
-var options = minimist(process.argv.slice(2), knownOptions);
+const options = minimist(process.argv.slice(2), knownOptions);
 
-var tsProject = ts.createProject("tsconfig.json");
-
-// TODO: The file property should point to the generated source (this implementation adds an extra folder to the path)
-// We should also make sure that we always generate urls in all the path properties (We shouldn't have \\s. This seems to
-// be an issue on Windows platforms)
-gulp.task("build", ["check-imports", "check-copyright"], build);
-
-gulp.task("quick-build", build);
-
-function build(callback) {
-    var tsProject = ts.createProject("tsconfig.json");
-    var isProd = options.env === "production";
-    var preprocessorContext = isProd ? { PROD: true } : { DEBUG: true };
-    log(`Building with preprocessor context: ${JSON.stringify(preprocessorContext)}`);
-    return tsProject.src()
-        .pipe(preprocess({ context: preprocessorContext })) //To set environment variables in-line
-        .pipe(sourcemaps.init())
-        .pipe(tsProject())
-        .on("error", function (e) {
-            callback(e);
-        })
-        .pipe(sourcemaps.write(".", {
-            includeContent: false,
-            sourceRoot: "."
-        }))
-        .pipe(gulp.dest(function (file) {
-            return file.cwd;
-        }));
-}
-
-gulp.task("watch", ["build"], function (cb) {
-    log("Watching build sources...");
-    return gulp.watch(sources, ["build"]);
-});
-
-gulp.task("default", function (callback) {
-    runSequence("clean", "build", "tslint", callback);
-});
-
-var lintSources = [
-    srcPath,
-    testPath
-].map(function (tsFolder) { return tsFolder + "/**/*.ts"; });
+let lintSources = [srcPath, testPath].map((tsFolder) => tsFolder + "/**/*.ts");
 lintSources = lintSources.concat([
     "!src/typings/**",
     "!test/resources/sampleReactNative022Project/**"
 ]);
 
-var libtslint = require("tslint");
-var tslint = require("gulp-tslint");
-gulp.task("tslint", function () {
-    var program = libtslint.Linter.createProgram("./tsconfig.json");
-    return gulp.src(lintSources, { base: "." })
-        .pipe(tslint({
-            formatter: "verbose",
-            program: program
-        }))
-        .pipe(tslint.report());
-});
+function build(failOnError, buildNls) {
+    const tsProject = ts.createProject("tsconfig.json");
+    const isProd = options.env === "production";
+    const preprocessorContext = isProd ? { PROD: true } : { DEBUG: true };
+    let gotError = false;
+    log(`Building with preprocessor context: ${JSON.stringify(preprocessorContext)}`);
+    const tsResult = tsProject.src()
+        .pipe(preprocess({ context: preprocessorContext })) //To set environment variables in-line
+        .pipe(sourcemaps.init())
+        .pipe(tsProject());
+
+    return tsResult.js
+        .pipe(buildNls ? nls.rewriteLocalizeCalls() : es.through())
+        .pipe(buildNls ? nls.createAdditionalLanguageFiles(defaultLanguages, "i18n", ".") : es.through())
+        .pipe(buildNls ? nls.bundleMetaDataFiles("vsmobile.vscode-react-native", ".") : es.through())
+        .pipe(buildNls ? nls.bundleLanguageFiles() : es.through())
+        .pipe(sourcemaps.write(".", { includeContent: false, sourceRoot: "." }))
+        .pipe(gulp.dest((file) => file.cwd))
+        .once("error", () => {
+            gotError = true;
+        })
+        .once("finish", () => {
+            if (failOnError && gotError) {
+                process.exit(1);
+            }
+        });
+}
 
 function test() {
     // Check if arguments were passed
     if (options.pattern) {
-        console.log("\nTesting cases that match pattern: " + options.pattern);
+        log(`\nTesting cases that match pattern: ${options.pattern}`);
     } else {
-        console.log("\nTesting cases that don't match pattern: extensionContext");
+        log("\nTesting cases that don't match pattern: extensionContext");
     }
 
     return gulp.src(["test/**/*.test.js", "!test/extension/**"])
@@ -113,56 +104,17 @@ function test() {
             ui: "tdd",
             useColors: true,
             invert: !options.pattern,
-            grep: options.pattern || "extensionContext"
+            grep: options.pattern || "(extensionContext|localizationContext)"
         }));
 }
 
-gulp.task("test", ["build", "tslint"], test);
-
-gulp.task('coverage:instrument', function () {
-    return gulp.src(["src/**/*.js", "!test/**"])
-        .pipe(istanbul({
-            // Use the isparta instrumenter (code coverage for ES6)
-            instrumenter: isparta.Instrumenter,
-            includeUntested: true
-        }))
-        // Force `require` to return covered files
-        .pipe(istanbul.hookRequire());
-});
-
-gulp.task('coverage:report', function (done) {
-    return gulp.src(
-        ["src/**/*.js", "!test/**"],
-        { read: false }
-    )
-        .pipe(istanbul.writeReports({
-            reporters: ['json', 'text-summary']
-        }));
-});
-
-gulp.task('coverage:remap', function () {
-    return gulp.src('coverage/coverage-final.json')
-        .pipe(remapIstanbul({
-            reports: {
-                'json': 'coverage/coverage.json',
-                'html': 'coverage/html-report'
-            }
-        }));
-});
-
-gulp.task("test:coverage", function (done) {
-    runSequence("quick-build", 'coverage:instrument',
-        "test-no-build", 'coverage:report', 'coverage:remap', done);
-});
-
-gulp.task("test-no-build", test);
-
-gulp.task("check-imports", function (cb) {
+gulp.task("check-imports", () => {
+    const tsProject = ts.createProject("tsconfig.json");
     return tsProject.src()
         .pipe(imports());
 });
 
-gulp.task("check-copyright", function (cb) {
+gulp.task("check-copyright", () => {
     return gulp.src([
         "**/*.ts",
         "**/*.js",
@@ -176,60 +128,168 @@ gulp.task("check-copyright", function (cb) {
         .pipe(copyright());
 });
 
-gulp.task("watch-build-test", ["build", "build-test"], function () {
-    return gulp.watch(sources, ["build", "build-test"]);
+gulp.task("tslint", () => {
+    const program = libtslint.Linter.createProgram("./tsconfig.json");
+    return gulp.src(lintSources, { base: "." })
+        .pipe(tslint({
+            formatter: "verbose",
+            program: program
+        }))
+        .pipe(tslint.report());
 });
 
-gulp.task("clean", function () {
-    var del = require("del");
-    var pathsToDelete = [
+// TODO: The file property should point to the generated source (this implementation adds an extra folder to the path)
+// We should also make sure that we always generate urls in all the path properties (We shouldn"t have \\s. This seems to
+// be an issue on Windows platforms)
+gulp.task("build", gulp.series("check-imports", "check-copyright", "tslint", function runBuild(done) {
+    build(true, true)
+        .once("finish", () => {
+            done();
+        });
+}));
+
+gulp.task("build-dev", gulp.series("check-imports", "check-copyright", function runBuild(done) {
+    build(false, false)
+        .once("finish", () => {
+            done();
+        });
+}));
+
+gulp.task("quick-build", gulp.series("build-dev"));
+
+gulp.task("watch", gulp.series("build", function runWatch() {
+    log("Watching build sources...");
+    return gulp.watch(sources, gulp.series("build"));
+}));
+
+gulp.task("clean", () => {
+    const del = require("del");
+    const pathsToDelete = [
         "src/**/*.js",
         "src/**/*.js.map",
         "test/**/*.js",
         "test/**/*.js.map",
         "out/",
         "!test/resources/sampleReactNative022Project/**/*.js",
-        ".vscode-test/"
+        ".vscode-test/",
+        "nls.*.json",
     ]
     return del(pathsToDelete, { force: true });
 });
 
-gulp.task("package", function (callback) {
-    var command = path.join(__dirname, "node_modules", ".bin", "vsce");
-    var args = ["package"];
+gulp.task("default", gulp.series("clean", "build"));
+
+gulp.task("test", gulp.series("build", "tslint", test));
+
+gulp.task("coverage:instrument", () => {
+    return gulp.src(["src/**/*.js", "!test/**"])
+        .pipe(istanbul({
+            // Use the isparta instrumenter (code coverage for ES6)
+            instrumenter: isparta.Instrumenter,
+            includeUntested: true
+        }))
+        // Force `require` to return covered files
+        .pipe(istanbul.hookRequire());
+});
+
+gulp.task("coverage:report", () => {
+    return gulp.src(
+        ["src/**/*.js", "!test/**"],
+        { read: false }
+    )
+    .pipe(istanbul.writeReports({
+        reporters: ["json", "text-summary"]
+    }));
+});
+
+gulp.task("coverage:remap", () => {
+    return gulp.src("coverage/coverage-final.json")
+        .pipe(remapIstanbul({
+            reports: {
+                "json": "coverage/coverage.json",
+                "html": "coverage/html-report"
+            }
+        }));
+});
+
+gulp.task("test-no-build", test);
+
+gulp.task("test:coverage", gulp.series("quick-build", "coverage:instrument", "test-no-build", "coverage:report", "coverage:remap"));
+
+gulp.task("watch-build-test", gulp.series("build", "test", function runWatch() {
+    return gulp.watch(sources, gulp.series("build", "test"));
+}));
+
+gulp.task("package", (callback) => {
+    const command = path.join(__dirname, "node_modules", ".bin", "vsce");
+    const args = ["package"];
     executeCommand(command, args, callback);
 });
 
-gulp.task("release", ["build"], function () {
-    var licenseFiles = ["LICENSE.txt", "ThirdPartyNotices.txt"];
-    var backupFolder = path.resolve(path.join(os.tmpdir(), "vscode-react-native"));
+gulp.task("release", gulp.series("build", function prepareLicenses() {
+    const licenseFiles = ["LICENSE.txt", "ThirdPartyNotices.txt"];
+    const backupFolder = path.resolve(path.join(os.tmpdir(), "vscode-react-native"));
     if (!fs.existsSync(backupFolder)) {
         fs.mkdirSync(backupFolder);
     }
 
     return Q({})
-        .then(function () {
+        .then(() => {
             /* back up LICENSE.txt, ThirdPartyNotices.txt, README.md */
-            console.log("Backing up license files to " + backupFolder + "...");
-            licenseFiles.forEach(function (fileName) {
+            log("Backing up license files to " + backupFolder + "...");
+            licenseFiles.forEach((fileName) => {
                 fs.writeFileSync(path.join(backupFolder, fileName), fs.readFileSync(fileName));
             });
 
             /* copy over the release package license files */
-            console.log("Preparing license files for release...");
+            log("Preparing license files for release...");
             fs.writeFileSync("LICENSE.txt", fs.readFileSync("release/LICENSE.txt"));
             fs.writeFileSync("ThirdPartyNotices.txt", fs.readFileSync("release/ThirdPartyNotices.txt"));
         }).then(() => {
-            console.log("Creating release package...");
+            log("Creating release package...");
             var deferred = Q.defer();
             // NOTE: vsce must see npm 3.X otherwise it will not correctly strip out dev dependencies.
-            executeCommand("vsce", ["package"], function (arg) { if (arg) { deferred.reject(arg); } deferred.resolve() }, { cwd: path.resolve(__dirname) });
+            executeCommand("vsce", ["package"], (arg) => { if (arg) { deferred.reject(arg); } deferred.resolve() }, { cwd: path.resolve(__dirname) });
             return deferred.promise;
-        }).finally(function () {
+        }).finally(() => {
             /* restore backed up files */
-            console.log("Restoring modified files...");
-            licenseFiles.forEach(function (fileName) {
+            log("Restoring modified files...");
+            licenseFiles.forEach((fileName) => {
                 fs.writeFileSync(path.join(__dirname, fileName), fs.readFileSync(path.join(backupFolder, fileName)));
             });
         });
+}));
+
+// Creates package.i18n.json files for all languages from {workspaceRoot}/i18n folder into project root
+gulp.task("add-i18n", () => {
+    return gulp.src(["package.nls.json"])
+        .pipe(nls.createAdditionalLanguageFiles(defaultLanguages, "i18n"))
+        .pipe(gulp.dest("."))
+});
+
+// Creates MLCP readable .xliff file and saves it locally
+gulp.task("translations-export", gulp.series("build", function runTranslationExport() {
+    return gulp.src(["package.nls.json", "nls.metadata.header.json", "nls.metadata.json"])
+        .pipe(nls.createXlfFiles(translationProjectName, translationExtensionName))
+        .pipe(gulp.dest(path.join("..", `${translationProjectName}-localization-export`)));
+}));
+
+// Imports localization from raw localized MLCP strings to VS Code .i18n.json files
+gulp.task("translations-import", (done) => {
+    var options = minimist(process.argv.slice(2), {
+        string: "location",
+        default: {
+            location: "../vscode-translations-import"
+        }
+    });
+    es.merge(defaultLanguages.map((language) => {
+        let id = language.transifexId || language.id;
+        log(path.join(options.location, id, 'vscode-extensions', `${translationExtensionName}.xlf`));
+        return gulp.src(path.join(options.location, id, 'vscode-extensions', `${translationExtensionName}.xlf`))
+            .pipe(nls.prepareJsonFiles())
+            .pipe(gulp.dest(path.join("./i18n", language.folderName)));
+    }))
+        .pipe(es.wait(() => {
+            done();
+        }));
 });

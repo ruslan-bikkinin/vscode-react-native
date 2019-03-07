@@ -7,15 +7,20 @@ import { IRunOptions } from "../launchArgs";
 import { GeneralMobilePlatform, MobilePlatformDeps } from "../generalMobilePlatform";
 import { ExponentHelper } from "./exponentHelper";
 import { TelemetryHelper } from "../../common/telemetryHelper";
+import { QRCodeContentProvider } from "../qrCodeContentProvider";
 
 import * as vscode from "vscode";
 import * as Q from "q";
 import * as XDL from "./xdlInterface";
 import * as url from "url";
+import * as nls from "vscode-nls";
+const localize = nls.loadMessageBundle();
+
 
 export class ExponentPlatform extends GeneralMobilePlatform {
     private exponentTunnelPath: string | null;
     private exponentHelper: ExponentHelper;
+    private qrCodeContentProvider: QRCodeContentProvider = new QRCodeContentProvider();
 
     constructor(runOptions: IRunOptions, platformDeps: MobilePlatformDeps = {}) {
         super(runOptions, platformDeps);
@@ -43,9 +48,14 @@ export class ExponentPlatform extends GeneralMobilePlatform {
                 },
                 (message) => {
                     return Q.Promise((resolve, reject) => {
-                        vscode.window.showInformationMessage(message)
-                            .then(password => {
-                                resolve(password || "");
+                        const okButton =  { title: "Ok" };
+                        const cancelButton =  { title: "Cancel", isCloseAffordance: true };
+                        vscode.window.showInformationMessage(message, {modal: true}, okButton, cancelButton)
+                            .then(answer => {
+                                if (answer === cancelButton) {
+                                    reject(ErrorHelper.getInternalError(InternalErrorCode.UserCancelledExpoLogin));
+                                }
+                                resolve("");
                             }, reject);
                     });
                 }
@@ -68,16 +78,16 @@ export class ExponentPlatform extends GeneralMobilePlatform {
                     return Q.reject<string>(reason);
                 })
                 .then(exponentUrl => {
-                    vscode.commands.executeCommand("vscode.previewHtml", vscode.Uri.parse(exponentUrl), 1, "Expo QR code");
+                    let exponentPage = vscode.window.createWebviewPanel("Expo QR Code", "Expo QR Code", vscode.ViewColumn.Two, { });
+                    exponentPage.webview.html = this.qrCodeContentProvider.provideTextDocumentContent(vscode.Uri.parse(exponentUrl));
                     return exponentUrl;
                 })
                 .then(exponentUrl => {
                     if (!exponentUrl) {
-                        return Q.reject<void>(ErrorHelper.getInternalError(InternalErrorCode.ExpectedExponentTunnelPath,
-                            "No link provided by exponent. Is your project correctly setup?"));
+                        return Q.reject<void>(ErrorHelper.getInternalError(InternalErrorCode.ExpectedExponentTunnelPath));
                     }
                     this.exponentTunnelPath = exponentUrl;
-                    const outputMessage = `Application is running on Exponent. Open your exponent app at ${this.exponentTunnelPath} to see it.`;
+                    const outputMessage = localize("ApplicationIsRunningOnExponentOpenToSeeIt", "Application is running on Expo. Open your Expo app at {0} to see it.", this.exponentTunnelPath);
                     this.logger.info(outputMessage);
 
                     return Q.resolve(void 0);
@@ -90,7 +100,7 @@ export class ExponentPlatform extends GeneralMobilePlatform {
     }
 
     public enableJSDebuggingMode(): Q.Promise<void> {
-        this.logger.info("Application is running on Exponent. Please shake device and select 'Debug JS Remotely' to enable debugging.");
+        this.logger.info(localize("ApplicationIsRunningOnExponentShakeDeviceForRemoteDebugging", "Application is running on Expo. Please shake device and select 'Debug JS Remotely' to enable debugging."));
         return Q.resolve<void>(void 0);
     }
 

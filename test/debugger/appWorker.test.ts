@@ -42,7 +42,9 @@ suite("appWorker", function () {
 
             teardown(function () {
                 // Reset everything
-                spawnStub.restore();
+                if (spawnStub) {
+                    spawnStub.restore();
+                }
                 postReplyFunction.reset();
                 if (testWorker) {
                     testWorker.stop();
@@ -97,10 +99,10 @@ suite("appWorker", function () {
                     postMessage(testResponse);`;
 
                 return workerWithScript(startScriptContents).start()
-                    .then(() => Q.delay(500))
+                    .then(() => Q.delay(5000))
                     .then(() =>
                         assert(postReplyFunction.calledWithExactly(expectedMessageResult)));
-            });
+            }).timeout(5500);
 
             test("should download script from remote packager", async () => {
                 class MockAppWorker extends ForkedAppWorker {
@@ -133,6 +135,91 @@ suite("appWorker", function () {
                         ...fakeMessage,
                         url: fakeDownloadedScript.filepath,
                     },
+                });
+            });
+
+            test("debuggee process should pass its output to appWorker", () => {
+                class MockAppWorker extends ForkedAppWorker {
+                    public getDebuggeeProcess() {
+                        return this.debuggeeProcess;
+                    }
+                }
+
+                const sourcesStoragePath = path.resolve(__dirname, "assets", "consoleLog");
+                const testWorker: MockAppWorker = new MockAppWorker("localhost", packagerPort, sourcesStoragePath, "", () => {});
+
+                let ws: WebSocket;
+                let waitForContinue = Q.defer();
+                let waitForCheckingOutput = Q.defer();
+                let debuggeeProcess: child_process.ChildProcess;
+
+                teardown((done) => {
+                    if (ws) ws.close();
+                    done();
+                });
+
+                const sendContinueToDebuggee = (wsDebuggerUrl: string, resolve: (value: {}) => void, reject: (reason: any) => void) => {
+                    ws = new WebSocket(wsDebuggerUrl);
+                    ws.on("open", function open() {
+                        ws.send(JSON.stringify({
+                            // id is just a random number, because debugging protocol requires it
+                            "id": 100,
+                            "method": "Runtime.runIfWaitingForDebugger",
+                        }), (err: Error) => {
+                            if (err) {
+                                reject(err);
+                            }
+                            // Delay is needed for debuggee process to execute script
+                            return Q.delay(1000).then(() => {
+                                resolve({});
+                            });
+                        });
+                    });
+                    ws.on("error", (err) => {
+                        // Suppress any errors from websocket client otherwise you'd get ECONNRESET or 400 errors
+                        // for some reasons
+                    });
+                };
+
+                return testWorker.start().then((port: number) => {
+                    let output: string = "";
+                    debuggeeProcess = testWorker.getDebuggeeProcess() as child_process.ChildProcess;
+                    debuggeeProcess.stderr.on("data", (data: string) => {
+                        // Two notices:
+                        // 1. More correct way would be getting websocket debugger url by requesting GET http://localhost:debugPort/json/list
+                        //    but for some reason sometimes it returns ECONNRESET, so we have to find it in debug logs produced by debuggee
+                        // 2. Debuggee process writes debug logs in stderr for some reasons
+                        data = data.toString();
+                        console.log(data);
+                        // Looking for websocket url
+                        // 1. Node v8+: ws://127.0.0.1:31732/7dd4c075-3222-4f31-8fb5-50cc5705dd21
+                        let found = data.match(/(ws:\/\/.+$)/gm);
+                        if (found) {
+                            // Debuggee process which has been ran with --debug-brk will be stopped at 0 line,
+                            // so we have to send it a command to continue execution of the script via websocket.
+                            sendContinueToDebuggee(found[0], waitForContinue.resolve, waitForContinue.reject);
+                            return;
+                        }
+
+                        // 2. Node v6: ws=127.0.0.1:31732/7dd4c075-3222-4f31-8fb5-50cc5705dd21
+                        found = data.match(/(ws=.+$)/gm);
+                        if (found) {
+                            sendContinueToDebuggee(found[0].replace("ws=", "ws:\\\\"), waitForContinue.resolve, waitForContinue.reject);
+                            return;
+                        }
+                    });
+                    debuggeeProcess.stdout.on("data", (data: string) => {
+                        output += data;
+                    });
+                    debuggeeProcess.on("exit", () => {
+                        assert.notEqual(output, "");
+                        assert.equal(output.trim(), "test output from debuggee process");
+                        waitForCheckingOutput.resolve({});
+                    });
+                    return waitForContinue.promise;
+                }).then(() => {
+                    debuggeeProcess.kill();
+                    return waitForCheckingOutput.promise;
                 });
             });
         });

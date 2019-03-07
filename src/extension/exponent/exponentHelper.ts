@@ -11,6 +11,10 @@ import { ReactNativeProjectHelper } from "../../common/reactNativeProjectHelper"
 import { FileSystem } from "../../common/node/fileSystem";
 import {OutputChannelLogger} from "../log/OutputChannelLogger";
 import stripJSONComments = require("strip-json-comments");
+import * as nls from "vscode-nls";
+import { ErrorHelper } from "../../common/error/errorHelper";
+import { InternalErrorCode } from "../../common/error/internalErrorCode";
+const localize = nls.loadMessageBundle();
 
 const APP_JSON = "app.json";
 const EXP_JSON = "exp.json";
@@ -25,13 +29,14 @@ const DBL_SLASHES = /\\/g;
 export class ExponentHelper {
     private workspaceRootPath: string;
     private projectRootPath: string;
-    private fs: FileSystem = new FileSystem();
+    private fs: FileSystem;
     private hasInitialized: boolean;
     private logger: OutputChannelLogger = OutputChannelLogger.getMainChannel();
 
-    public constructor(workspaceRootPath: string, projectRootPath: string) {
+    public constructor(workspaceRootPath: string, projectRootPath: string, fs: FileSystem = new FileSystem()) {
         this.workspaceRootPath = workspaceRootPath;
         this.projectRootPath = projectRootPath;
+        this.fs = fs;
         this.hasInitialized = false;
         // Constructor is slim by design. This is to add as less computation as possible
         // to the initialization of the extension. If a public method is added, make sure
@@ -41,12 +46,11 @@ export class ExponentHelper {
 
     public configureExponentEnvironment(): Q.Promise<void> {
         this.lazilyInitialize();
-        this.logger.info("Making sure your project uses the correct dependencies for exponent. This may take a while...");
-        this.logger.logStream("Checking if this is Expo app.");
-        return this.isExpoApp(true)
+        this.logger.info(localize("MakingSureYourProjectUsesCorrectExponentDependencies", "Making sure your project uses the correct dependencies for Expo. This may take a while..."));
+        this.logger.logStream(localize("CheckingIfThisIsExpoApp", "Checking if this is Expo app."));
+        return this.isExpoApp(true, true)
             .then(isExpo => {
                 this.logger.logStream(".\n");
-
                 return this.patchAppJson(isExpo);
             });
     }
@@ -63,12 +67,12 @@ export class ExponentHelper {
             .then((user) => {
                 if (!user) {
                     let username = "";
-                    return showMessage("You need to login to exponent. Please provide username and password to login. If you don't have an account we will create one for you.")
+                    return showMessage(localize("YouNeedToLoginToExpo", "You need to login to Expo. Please provide your Expo account username and password in the input boxes after closing this window. If you don't have an account, please go to https://expo.io to create one."))
                         .then(() =>
-                            promptForInformation("Exponent username", false)
+                            promptForInformation(localize("ExpoUsername", "Expo username"), false)
                         ).then((name: string) => {
                             username = name;
-                            return promptForInformation("Exponent password", true);
+                            return promptForInformation(localize("ExpoPassword", "Expo password"), true);
                         })
                         .then((password: string) =>
                             XDL.login(username, password));
@@ -86,7 +90,7 @@ export class ExponentHelper {
             .then(opts => opts || {});
     }
 
-    public isExpoApp(showProgress: boolean = false): Q.Promise<boolean> {
+    public isExpoApp(showProgress: boolean = false, logIfExpoIsNotInstalled: boolean = false): Q.Promise<boolean> {
         if (showProgress) {
             this.logger.logStream("...");
         }
@@ -95,8 +99,16 @@ export class ExponentHelper {
         return this.fs.readFile(packageJsonPath)
             .then(content => {
                 const packageJson = JSON.parse(content);
-                const isExp = packageJson.dependencies && !!packageJson.dependencies.expo || false;
+                let isExp = (packageJson.dependencies && packageJson.dependencies.expo) || (packageJson.devDependencies && packageJson.devDependencies.expo);
+                isExp = !!isExp;
                 if (showProgress) this.logger.logStream(".");
+                if (!isExp && logIfExpoIsNotInstalled) {
+                    // Expo requires expo package to be installed inside RN application in order to be able to run it
+                    // https://github.com/expo/expo-cli/issues/255#issuecomment-453214632
+                    this.logger.logStream("\n");
+                    this.logger.logStream(localize("ExpoPackageIsNotInstalled", "[Warning] expo package is not installed locally for your project, further errors may occur. Please, run \"npm install expo --save-dev\" inside your project."));
+                    this.logger.logStream("\n");
+                }
                 return isExp;
             }).catch(() => {
                 if (showProgress) {
@@ -131,11 +143,11 @@ export class ExponentHelper {
             this.fs.exists(this.pathToFileInWorkspace(DEFAULT_IOS_INDEX)),
             this.fs.exists(this.pathToFileInWorkspace(DEFAULT_ANDROID_INDEX)),
         ])
-        .spread((expo: boolean, ios: boolean): string => {
-            return expo ? this.pathToFileInWorkspace(DEFAULT_EXPONENT_INDEX) :
-                ios ? this.pathToFileInWorkspace(DEFAULT_IOS_INDEX) :
-                this.pathToFileInWorkspace(DEFAULT_ANDROID_INDEX);
-        });
+            .spread((expo: boolean, ios: boolean): string => {
+                return expo ? this.pathToFileInWorkspace(DEFAULT_EXPONENT_INDEX) :
+                    ios ? this.pathToFileInWorkspace(DEFAULT_IOS_INDEX) :
+                        this.pathToFileInWorkspace(DEFAULT_ANDROID_INDEX);
+            });
     }
 
     private generateFileContent(name: string, entryPoint: string): string {
@@ -213,7 +225,7 @@ AppRegistry.registerRunnable('main', function(appParameters) {
                         if (!sdkVersion) {
                             return XDL.supportedVersions()
                                 .then((versions) => {
-                                    return Q.reject<string>(new Error(`React Native version not supported by exponent. Major versions supported: ${versions.join(", ")}`));
+                                    return Q.reject<string>(ErrorHelper.getInternalError(InternalErrorCode.RNVersionNotSupportedByExponent, versions.join(", ")));
                                 });
                         }
                         return sdkVersion;

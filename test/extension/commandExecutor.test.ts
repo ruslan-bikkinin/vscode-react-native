@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for details.
 
-import {CommandExecutor} from "../../src/common/commandExecutor";
+import { CommandExecutor } from "../../src/common/commandExecutor";
 import { ConsoleLogger } from "../../src/extension/log/ConsoleLogger";
 
 import { Node } from "../../src/common/node/node";
@@ -83,10 +83,8 @@ suite("commandExecutor", function() {
 
         test("should spawn a command", function(done: MochaDone) {
             let ce = new CommandExecutor();
-            let loggedOutput: string = "";
 
             sinon.stub(Log, "log", function(message: string, formatMessage: boolean = true) {
-                loggedOutput += message;
                 console.log(message);
             });
 
@@ -98,10 +96,7 @@ suite("commandExecutor", function() {
 
         test("spawn should reject a bad command", function(done: MochaDone) {
             let ce = new CommandExecutor();
-            let loggedOutput: string = "";
-
             sinon.stub(Log, "log", function(message: string, formatMessage: boolean = true) {
-                loggedOutput += message;
                 console.log(message);
             });
 
@@ -127,7 +122,7 @@ suite("commandExecutor", function() {
             new CommandExecutor()
                 .spawnReactCommand("run-ios").outcome
                 .then(done, err => {
-                    assert.fail(null, null, "react-natibe command was not expected to fail");
+                    assert.fail(null, null, "react-native command was not expected to fail");
                 });
         });
     });
