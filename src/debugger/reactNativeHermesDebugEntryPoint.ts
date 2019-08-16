@@ -8,7 +8,7 @@ import { EntryPointHandler, ProcessType } from "../common/entryPointHandler";
 import { ErrorHelper } from "../common/error/errorHelper";
 import { InternalErrorCode } from "../common/error/internalErrorCode";
 import { NullTelemetryReporter, ReassignableTelemetryReporter } from "../common/telemetryReporters";
-import { makeAdapter, makeSession } from "./nodeDebugWrapper";
+import { makeSession } from "./nodeDebugWrapper";
 import { ChromeDebugSession, ChromeDebugAdapter } from "vscode-chrome-debug-core";
 import { DebugSession, OutputEvent, TerminatedEvent } from "vscode-debugadapter";
 import * as nls from "vscode-nls";
@@ -27,34 +27,28 @@ function bailOut(reason: string): void {
 
 function codeToRun() {
     /**
-     * For debugging React Native we basically want to debug node plus some other stuff.
-     * There is no need to create a new adapter for node because ther already exists one.
-     * We look for node debug adapter on client's computer so we can jump of on top of that.
+     *  For debugging React Native Hermes raw ChromeDebugAdapter is used.
      */
     let nodeDebugFolder: string;
-    let Node2DebugAdapter: typeof ChromeDebugAdapter;
+    let adapter: typeof ChromeDebugAdapter;
 
     // nodeDebugLocation.json is dynamically generated on extension activation.
     // If it fails, we must not have been in a react native project
     try {
         /* tslint:disable:no-var-requires */
         nodeDebugFolder = require("./nodeDebugLocation.json").nodeDebugPath;
-        Node2DebugAdapter = require(path.join(nodeDebugFolder, "out/src/nodeDebugAdapter")).NodeDebugAdapter;
+        adapter = require(path.join(nodeDebugFolder, "node_modules/vscode-chrome-debug-core/out/src/chrome/chromeDebugAdapter")).ChromeDebugAdapter;
         /* tslint:enable:no-var-requires */
 
         /**
-         * We did find chrome debugger package and node2 debug adapter. Lets create debug
-         * session and adapter with our customizations.
+         * We did find chrome debug adapter. Lets create debug session with our customizations.
          */
         let session: typeof ChromeDebugSession;
-        let adapter: typeof ChromeDebugAdapter;
 
         try {
-            /* Create customised react-native debug adapter based on Node-debug2 adapter */
-            adapter = makeAdapter(Node2DebugAdapter);
             // Create a debug session class based on ChromeDebugSession
             session = makeSession(ChromeDebugSession,
-                { adapter, extensionName }, telemetryReporter, extensionName, version, false);
+                { adapter, extensionName }, telemetryReporter, extensionName, version, true);
 
             // Run the debug session for the node debug adapter with our modified requests
             ChromeDebugSession.run(session);
