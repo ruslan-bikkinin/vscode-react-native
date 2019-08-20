@@ -33,7 +33,7 @@
             "name": "Quick Debug Debugger",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceRoot}/src/debugger/reactNativeDebugEntryPoint.ts",
+            "program": "${workspaceRoot}/src/debugger/reactNativeHermesDebugEntryPoint.ts",
             "runtimeArgs": [
                 "--harmony"
             ],
@@ -51,7 +51,7 @@
             "name": "Debug Debugger",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceRoot}/src/debugger/reactNativeDebugEntryPoint.ts",
+            "program": "${workspaceRoot}/src/debugger/reactNativeHermesDebugEntryPoint.ts",
             "runtimeArgs": [
                 "--harmony"
             ],
