@@ -3,19 +3,18 @@
 
 import * as path from "path";
 import * as fs from "fs";
-import { ReactNativeProjectHelper } from "../common/reactNativeProjectHelper";
-import { ErrorHelper } from "../common/error/errorHelper";
-import { ILaunchArgs } from "../extension/launchArgs";
-import { getProjectRoot } from "./nodeDebugWrapper";
-import { Telemetry } from "../common/telemetry";
-import {OutputEvent} from "vscode-debugadapter";
-import { TelemetryHelper } from "../common/telemetryHelper";
-import { RemoteTelemetryReporter, ReassignableTelemetryReporter, NullTelemetryReporter } from "../common/telemetryReporters";
+import { ReactNativeProjectHelper } from "../../common/reactNativeProjectHelper";
+import { ErrorHelper } from "../../common/error/errorHelper";
+import { ILaunchArgs } from "../../extension/launchArgs";
+import { getProjectRoot } from "../nodeDebugWrapper";
+import { Telemetry } from "../../common/telemetry";
+import { OutputEvent } from "vscode-debugadapter";
+import { TelemetryHelper } from "../../common/telemetryHelper";
+import { RemoteTelemetryReporter, ReassignableTelemetryReporter, NullTelemetryReporter } from "../../common/telemetryReporters";
 import { ChromeDebugAdapter, ChromeDebugSession, IChromeDebugSessionOpts, IAttachRequestArgs, logger } from "vscode-chrome-debug-core";
-import { InternalErrorCode } from "../common/error/internalErrorCode";
-import { RemoteExtension } from "../common/remoteExtension";
-import {DebugProtocol} from "vscode-debugprotocol";
-// import * as Q from "q";
+import { InternalErrorCode } from "../../common/error/internalErrorCode";
+import { RemoteExtension } from "../../common/remoteExtension";
+import { DebugProtocol } from "vscode-debugprotocol";
 
 export interface IHermesAttachRequestArgs extends IAttachRequestArgs, ILaunchArgs {
     cwd: string; /* Automatically set by VS Code to the currently opened folder */
@@ -26,13 +25,11 @@ export interface IHermesLaunchRequestArgs extends DebugProtocol.LaunchRequestArg
 export class HermesDebugAdapter extends ChromeDebugAdapter {
 
     private outputLogger: (message: string, error?: boolean | string) => void;
-     private telemetryReporter: ReassignableTelemetryReporter;
-     private projectRootPath: string;
-     private remoteExtension: RemoteExtension;
-     private isTelemetryAndRemoteExtensionInitialized: boolean;
-
-    // private previousLaunchArgs: IHermesLaunchRequestArgs | null;
-    // private previousAttachArgs: IHermesAttachRequestArgs | null;
+    private telemetryReporter: ReassignableTelemetryReporter;
+    private projectRootPath: string;
+    private remoteExtension: RemoteExtension;
+    private isTelemetryAndRemoteExtensionInitialized: boolean;
+    private previousAttachArgs: IHermesAttachRequestArgs;
 
     public constructor(opts: IChromeDebugSessionOpts, debugSession: ChromeDebugSession) {
         super(opts, debugSession);
@@ -52,13 +49,11 @@ export class HermesDebugAdapter extends ChromeDebugAdapter {
             debugSession.sendEvent(new OutputEvent(message + newLine, category));
         };
 
-        this.outputLogger("CordovaDebugAdapter - constructor");
         this.telemetryReporter = new ReassignableTelemetryReporter(new NullTelemetryReporter());
         this.isTelemetryAndRemoteExtensionInitialized = false;
     }
 
     public launch(launchArgs: IHermesLaunchRequestArgs): Promise<void>  {
-        // this.previousLaunchArgs = launchArgs;
         const extProps = {
             platform: {
                 value: launchArgs.platform,
@@ -66,7 +61,6 @@ export class HermesDebugAdapter extends ChromeDebugAdapter {
             },
         };
 
-        this.outputLogger("isTelemetryAndRemoteExtensionInitialized: " + this.isTelemetryAndRemoteExtensionInitialized);
         return new Promise<void>((resolve, reject) => this.initializeTelemetryAndRemoteExtension(launchArgs)
             .then(() => TelemetryHelper.generate("launch", extProps, (generator) => {
                 this.outputLogger("HermesDebugAdapter - remoteExtension.launch");
@@ -78,8 +72,10 @@ export class HermesDebugAdapter extends ChromeDebugAdapter {
                     .then((packagerPort: number) => {
                         this.outputLogger("HermesDebugAdapter - packagerPort");
                         launchArgs.port = packagerPort;
-                        this.attach(launchArgs);
-                    })
+                        this.attach(launchArgs).then(() => {
+                            resolve();
+                        }).catch((e) => reject(e));
+                    }).catch((e) => reject(e));
             })
             .catch((err) => {
                 this.cleanUp();
@@ -88,69 +84,43 @@ export class HermesDebugAdapter extends ChromeDebugAdapter {
     }
 
     public attach(attachArgs: IHermesAttachRequestArgs): Promise<void> {
-        /*const extProps = {
+        const extProps = {
             platform: {
                 value: attachArgs.platform,
                 isPii: false,
             },
-        };*/
-        // this.previousAttachArgs = attachArgs;
-        // logger.log("HermesDebugAdapter - attach");
-        let promise = new Promise<IAttachRequestArgs>((resolve, reject) => this.initializeTelemetryAndRemoteExtension(attachArgs)
-            /*.then(() => TelemetryHelper.generate("launch", extProps, (generator) => {*/
-                /*return new Promise((resolve, reject) => {
-                    if (attachArgs.port)  attachArgs.port;
-                    return this.remoteExtension.getPackagerPort(attachArgs.cwd);
-                    })
+        };
+
+        this.previousAttachArgs = attachArgs;
+
+        return new Promise<void>((resolve, reject) =>
+        this.initializeTelemetryAndRemoteExtension(attachArgs)
+            .then(() => TelemetryHelper.generate("launch", extProps, (generator) => {
+                return this.remoteExtension.getPackagerPort(attachArgs.cwd)
                     .then((packagerPort: number) => {
                         this.outputLogger("HermesDebugAdapter - superAttach");
-                        let attachArguments = Object.assign({}, attachArgs, {
+                        const attachArguments = Object.assign({}, attachArgs, {
                             address: "localhost",
                             port: packagerPort,
                             restart: true,
                             request: "attach",
                             remoteRoot: undefined,
                             localRoot: undefined,
+                            // trace: true
                         });
-                        super.attach(attachArguments)
-                    })
-            })*/
-            .then(() => {
-                // /*if (attachArgs.port)*/ return attachArgs.port;
-                return this.remoteExtension.getPackagerPort(attachArgs.cwd);
-            })
-            .then((packagerPort: number) => {
-                this.outputLogger("HermesDebugAdapter - superAttach");
-                return Object.assign({}, attachArgs, {
-                    address: "localhost",
-                    port: packagerPort,
-                    restart: true,
-                    request: "attach",
-                    remoteRoot: undefined,
-                    localRoot: undefined,
-                });
-                // return packagerPort;
-            })
-            // .then((packagerPort) => return super.attach({port: packagerPort}).then(() => this.outputLogger("here!")))
-            );
-
-            let promise2 = <Promise<IAttachRequestArgs>>promise;
-            return promise2.then((attachArguments) => {
-                return super.attach(attachArguments).then(() => this.outputLogger("here!"))
-            }).catch((err) => {
-                this.cleanUp();
-                this.outputLogger(err.message || err, true);
-            });
+                        super.attach(attachArguments).then(() => {
+                            resolve();
+                        }).catch((e) => reject(e));
+                    }).catch((e) => reject(e));
+        })
+        .catch((err) => {
+            this.cleanUp();
+            this.outputLogger(err.message || err, true);
+        })));
     }
 
-    /*private async test(attachArgs: any) {
-        await super.attach(attachArgs);
-        this.outputLogger("HermesDebugAdapter - attach - done4");
-    }*/
-
     public disconnect(args: DebugProtocol.DisconnectArguments): void {
-        //this.cleanUp();
-        //super.disconnect({terminateDebuggee: true});
+        this.cleanUp();
         super.disconnect(args);
     }
 
@@ -164,7 +134,7 @@ export class HermesDebugAdapter extends ChromeDebugAdapter {
                 }
                 this.projectRootPath = projectRootPath;
                 this.remoteExtension = RemoteExtension.atProjectRootPath(this.projectRootPath);
-                const version = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")).version;
+                const version = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf-8")).version;
 
                 // Start to send telemetry
                 this.telemetryReporter.reassignTo(new RemoteTelemetryReporter(
@@ -191,13 +161,11 @@ export class HermesDebugAdapter extends ChromeDebugAdapter {
 
     private cleanUp(){
 
-        this.remoteExtension.stopMonitoringLogcat()
-            .catch(reason => logger.warn("CouldNotStopMonitoringLogcat"))
-            .finally(() => super.disconnect({terminateDebuggee: true}));
-
-        // Clean up this session's attach and launch args
-        // this.previousLaunchArgs = null;
-        // this.previousAttachArgs = null;
+        if (this.previousAttachArgs.platform === "android") {
+            this.remoteExtension.stopMonitoringLogcat()
+                .catch(reason => logger.warn("CouldNotStopMonitoringLogcat"))
+                .finally(() => super.disconnect({terminateDebuggee: true}));
+        }
     }
 
 }

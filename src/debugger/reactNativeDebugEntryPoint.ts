@@ -54,7 +54,7 @@ function codeToRun() {
             adapter = makeAdapter(Node2DebugAdapter);
             // Create a debug session class based on ChromeDebugSession
             session = makeSession(ChromeDebugSession,
-                { adapter, extensionName }, telemetryReporter, extensionName, version, false);
+                { adapter, extensionName }, telemetryReporter, extensionName, version);
 
             // Run the debug session for the node debug adapter with our modified requests
             ChromeDebugSession.run(session);
