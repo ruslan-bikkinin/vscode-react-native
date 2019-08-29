@@ -1,6 +1,6 @@
 # Hermes debugger problems
 
-Hello, we are the developers team of VS Code extension for debugging React Native apps ([vscode-react-native](https://github.com/microsoft/vscode-react-native)). Now we are working on the prototype of React Native Hermes debugger and we've faced several problems of using vscode-chrome-debug-core lib. We consider that the problems are in vscode-chrome-debug-core, because our realisation just a bit extends chromeDebugAdapter. We don't add any significant changes to chromeDebugAdapter. Could you please look through the list of our problems and give any comments concerning them?
+Hello, we are the development team of VS Code extension for debugging React Native apps ([vscode-react-native](https://github.com/microsoft/vscode-react-native)). Now we are working on the prototype of React Native Hermes debugger and we've faced several problems of using vscode-chrome-debug-core lib. We consider that the problems are in vscode-chrome-debug-core lib, because our realisation just a bit extends chromeDebugAdapter. We didn't add any significant changes to chromeDebugAdapter. The debugging process of Android Hermes apps in Google Chrome also has some troubles. Could you please look through the list of our problems and give any comments concerning them?
 
 ## The list of problems
 
