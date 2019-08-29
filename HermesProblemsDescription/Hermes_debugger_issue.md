@@ -4,39 +4,36 @@ Hello, we are the development team of VS Code extension for debugging React Nati
 
 ## The list of problems
 
-- The debugger doesn’t react on break points located into constructor functions (For example, in “App” function or user’s component constructor).
-  <br/>The debugger reacts only when an user clicks a button or others UI elements which have event handlers.
+- The debugger doesn’t show Global, Closure variables. The debugger provides only Local variables (function scope). Google Chrome displays Global variables, but Locals aren't shown.
 
-  |Enable Hermes|
-  |---|
-  |<img src="./images/Screen Shot 2019-08-21 at 09.58.49.png" alt="drawing"/>|
-  |<img src="./images/Screen Shot 2019-08-21 at 09.59.46.png" alt="drawing"/>|
-
-- The debugger doesn’t show Global, Closure variables. The debugger provides only Local variables (function scope).
-
-
+  |Enable Hermes|Chrome|
+  |---|---|
+  |<img src="./images2/Screen Shot 2019-08-29 at 13.05.33.png" alt="drawing"/>|<img src="./images2/Screen Shot 2019-08-29 at 13.06.35.png" alt="drawing"/>|
 
 - The debugger doesn’t show value of numeric variables.
+
 - The debugger shows additional VM_unknown calls in Call Stack.
   <br/>The debugger displays all the calls as well as Google Chrome, but also adds unknown calls.
+
+  |Enable Hermes|Chrome|
+  |---|---|
+  |<img src="./images2/Screen Shot 2019-08-29 at 13.10.11.png" alt="drawing"/>|<img src="./images2/Screen Shot 2019-08-29 at 13.10.44.png" alt="drawing"/>|
+
 - The debugger doesn’t provide properties containing in “this” object.
 - The debugger doesn’t provide complete object data (For example, Date object, Map object - there is only an object name without internal data).
   <br/> If an object contains an array the debugger doesn't display the object's data.
+  <br/> Google Chtome displays some objects correctly, but not all (e.g. Map object).
 
   |Enable Hermes|Chrome|
   |---|---|
   |<img src="./images/Screen Shot 2019-08-21 at 10.12.43.png" alt="drawing"/>|<img src="./images/Screen Shot 2019-08-21 at 13.23.51.png" alt="drawing"/>|
-  ||<img src="./images/Screen Shot 2019-08-21 at 10.32.53.png" alt="drawing"/>|
+  |<img src="./images2/Screen Shot 2019-08-29 at 13.26.54.png" alt="drawing"/>|<img src="./images2/Screen Shot 2019-08-29 at 13.27.40.png" alt="drawing"/>|
   |<img src="./images/Screen Shot 2019-08-21 at 13.09.15.png" alt="drawing"/>|<img src="./images/Screen Shot 2019-08-21 at 13.04.02.png" alt="drawing"/>|
 
 - The debugger doesn’t show local variables, if there is any array definition in a handler function.
-  <br/>The debugger remove local variables data only when it comes an array definition.
+  <br/>The debugger remove local variables data only when it comes an array definition. Google Chtome displays array's data.
 
   |Enable Hermes|Chrome|
   |---|---|
   |Before the array definition: <br/><img src="./images/Screen Shot 2019-08-21 at 11.06.10.png" alt="drawing"/>|<img src="./images/Screen Shot 2019-08-21 at 13.15.22.png" alt="drawing"/>|
   |After the array definition: <br/><img src="./images/Screen Shot 2019-08-21 at 11.07.51.png" alt="drawing"/>|||
-
-## Debugging in Google Chrome
-- There aren't Local variables.
-  <img src="./images/Screen Shot 2019-08-21 at 10.23.16.png" alt="drawing"/>
